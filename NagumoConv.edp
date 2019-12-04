@@ -1,0 +1,65 @@
+// Nagumo equation with Homogeneus Dirichlet BCs on a circle
+
+border c(t=0,2*pi){x=4*cos(t);y=4*sin(t);label=1;}; //Border of the domain
+int M = 301; //Number of points in time domain
+real a = 0.25; //Threshold parameter
+real T = 30; //Final time
+real dt = T/(M-1); //Amplitude of the time interval
+real[int] error = [0,0,0,0]; //Place where we store the errors
+macro grad (u)  [dx(u), dy(u)] //EOM Macro to define the gradient
+
+//We compute a reference solution with a lot of triangles to see the convergence
+int k = 60; //Number of discretization points on the boundary for the reference solution
+
+func f = 0.001*exp(-(x)^2-(y)^2); //Initial condition
+int n = 30, m = 20;
+mesh Th=buildmesh(c(k)); //Define the triangulation with k point over the boundary c
+plot(Th,wait=1); // plot of the mesh
+
+fespace Vh(Th,P2); //Galerkin space of piecewise quadratic polynomials
+Vh uh,uOld,vh; //Definition of the functions we will need/find
+uOld = f; //Set the initial condition
+plot(uOld,wait=1,value=true,fill=1, dim=3);
+
+//Loop to solve the problem to find the reference solution
+for (int it=0;it<M-1;it++) {
+  solve nagumo(uh,vh) =
+    int2d(Th)(uh*vh + dt*grad(uh)'*grad(vh)/2)
+    - int2d(Th)(uOld*vh - dt*(grad(uOld)'*grad(vh))/2)
+    + int2d(Th)(dt*uOld*(1-uOld)*(uOld-a)*vh)
+    + on(1,uh=0);
+    uOld = uh; //Update the solution for the next iteration
+}
+Vh uref = uh; //I keep stored the reference solution for future comparisons
+plot(uref,wait=1,value=true,fill=1, dim=3);
+
+int count = 0;
+//Loop over the tested triangulations, i.e. with 10,20,30,40 points over the boundary c
+for (k=10;k<50;k+=10){
+
+  func f = 0.001*exp(-(x)^2-(y)^2);
+  int n = 30, m = 20;
+  mesh Th=buildmesh(c(k));
+  plot(Th,wait=1); // plot of the mesh
+
+  fespace Sh(Th,P2); //Define the Galerkin space over the mesh with piecewise quadratic polynomials
+  Sh uh,uOld,vh; //Fix the needed functions in this Galerkin space
+  uOld = f; //Set the initial condition
+  plot(uOld,wait=1,value=true,fill=1, dim=3);
+
+  //Solve in time
+  for (int it=0;it<M-1;it++) {
+    solve nagumo(uh,vh) =
+      int2d(Th)(uh*vh + dt*grad(uh)'*grad(vh)/2)
+      - int2d(Th)(uOld*vh - dt*(grad(uOld)'*grad(vh))/2)
+      + int2d(Th)(dt*uOld*(1-uOld)*(uOld-a)*vh)
+      //+ on(1,2,3,4, uh=0);
+      + on(1,uh=0);
+      uOld = uh; //Update the solution for the next iteration
+  }
+  Vh v = uref; //Store the reference solution in a variable in the right fespace
+  //so that we can integrate on the right triangulation below
+  error[count] = int2d(Th) ((uh-v)'*(uh-v)); //Compute the error in the L2 norm
+  count++;
+}
+cout<<"Error: "<<endl<<error<<endl; //Print the obtained errors
